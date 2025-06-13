@@ -18,7 +18,7 @@ const pool = new Pool({
     ca: process.env.SSL_CA,
   },
 });
-
+pool.query('SET search_path TO test;');
 app.post('/api/locations', async (req, res) => {
   const { name, latitude, longitude } = req.body;
   try {
