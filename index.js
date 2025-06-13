@@ -47,6 +47,19 @@ app.listen(PORT, () => {
   console.log(`Serwer działa na http://localhost:${PORT}`);
 });
 
-app.get('/', (req, res) => {
-  res.send('API działa! 🔥 Użyj np. /api/locations');
+app.get('/', async (req, res) => {
+  try {
+    const dbResult = await pool.query('SELECT current_database()');
+    const schemaResult = await pool.query('SHOW search_path');
+    res.send(`
+      <h2>API działa! 🔥</h2>
+      <p>Baza danych: <strong>${dbResult.rows[0].current_database}</strong></p>
+      <p>Search path (schematy): <strong>${schemaResult.rows[0].search_path}</strong></p>
+      <p>Użyj np. <a href="/api/locations">/api/locations</a></p>
+    `);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Błąd podczas pobierania informacji o bazie.');
+  }
 });
+
