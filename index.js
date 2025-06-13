@@ -18,12 +18,11 @@ const pool = new Pool({
     ca: process.env.SSL_CA,
   },
 });
-pool.query('SET search_path TO test;');
 app.post('/api/locations', async (req, res) => {
   const { name, latitude, longitude } = req.body;
   try {
     const result = await pool.query(
-      'INSERT INTO locations (name, latitude, longitude) VALUES ($1, $2, $3) RETURNING *',
+      'INSERT INTO test.locations (name, latitude, longitude) VALUES ($1, $2, $3) RETURNING *',
       [name, latitude, longitude]
     );
     res.json(result.rows[0]);
@@ -34,7 +33,7 @@ app.post('/api/locations', async (req, res) => {
 });
 app.get('/api/locations', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM locations ORDER BY created_at DESC');
+    const result = await pool.query('SELECT * FROM test.locations ORDER BY created_at DESC');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
