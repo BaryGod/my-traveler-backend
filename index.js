@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const { OAuth2Client } = require('google-auth-library');
 
 const app = express();
 app.use(cors());
@@ -18,6 +19,69 @@ const pool = new Pool({
     ca: process.env.SSL_CA,
   },
 });
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// ====================== GOOGLE LOGIN ======================
+app.post('/auth/google', async (req, res) => {
+  const { idToken } = req.body;
+
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const {
+      sub: googleId,
+      email,
+      name: fullName,
+      given_name: firstName,
+      family_name: lastName,
+      picture,
+    } = payload;
+
+    const existingUser = await pool.query(
+      'SELECT * FROM users WHERE google_id = $1',
+      [googleId]
+    );
+
+    let user;
+    if (existingUser.rows.length > 0) {
+      // ✏️ Zaktualizuj dane użytkownika przy ponownym logowaniu
+      const update = await pool.query(
+        `UPDATE users SET 
+          email = $1, 
+          full_name = $2, 
+          first_name = $3, 
+          last_name = $4, 
+          picture = $5 
+         WHERE google_id = $6
+         RETURNING *`,
+        [email, fullName, firstName, lastName, picture, googleId]
+      );
+      user = update.rows[0];
+    } else {
+      // 🆕 Nowy użytkownik
+      const insert = await pool.query(
+        `INSERT INTO users 
+          (google_id, email, full_name, first_name, last_name, picture)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [googleId, email, fullName, firstName, lastName, picture]
+      );
+      user = insert.rows[0];
+    }
+
+    res.json({ user });
+  } catch (error) {
+    console.error('Błąd podczas logowania Google:', error);
+    res.status(401).json({ error: 'Nieprawidłowy token Google' });
+  }
+});
+
+// ====================== LOKALIZACJE ======================
 app.post('/api/locations', async (req, res) => {
   const { name, latitude, longitude } = req.body;
   try {
@@ -31,6 +95,7 @@ app.post('/api/locations', async (req, res) => {
     res.status(500).json({ error: 'Błąd zapisu do bazy' });
   }
 });
+
 app.get('/api/locations', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM locations ORDER BY created_at DESC');
@@ -41,44 +106,8 @@ app.get('/api/locations', async (req, res) => {
   }
 });
 
+// ====================== START SERWERA ======================
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Serwer działa na porcie ${port}`);
-});
- const { OAuth2Client } = require('google-auth-library');
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-app.post('/auth/google', async (req, res) => {
-  const { idToken } = req.body;
-
-  try {
-    const ticket = await client.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-
-    const payload = ticket.getPayload();
-    const { sub: googleId, email, name, picture } = payload;
-
-    const existingUser = await pool.query(
-      'SELECT * FROM users WHERE google_id = $1',
-      [googleId]
-    );
-
-    let user;
-    if (existingUser.rows.length > 0) {
-      user = existingUser.rows[0];
-    } else {
-      const insertResult = await pool.query(
-        'INSERT INTO users (google_id, email, name, picture) VALUES ($1, $2, $3, $4) RETURNING *',
-        [googleId, email, name, picture]
-      );
-      user = insertResult.rows[0];
-    }
-
-    res.json({ user });
-  } catch (error) {
-    console.error('Błąd podczas logowania Google:', error);
-    res.status(401).json({ error: 'Nieprawidłowy token Google' });
-  }
 });
