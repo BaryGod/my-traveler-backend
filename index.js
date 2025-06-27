@@ -41,40 +41,7 @@ app.get('/api/locations', async (req, res) => {
   }
 });
 
-const { OAuth2Client } = require('google-auth-library');
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-app.post('/auth/google', async (req, res) => {
-  const { idToken } = req.body;
-
-  try {
-    const ticket = await client.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-
-    const payload = ticket.getPayload();
-    const { sub: googleId, email, name, picture } = payload;
-
-    const existingUser = await pool.query(
-      'SELECT * FROM users WHERE google_id = $1',
-      [googleId]
-    );
-
-    let user;
-    if (existingUser.rows.length > 0) {
-      user = existingUser.rows[0];
-    } else {
-      const insertResult = await pool.query(
-        'INSERT INTO users (google_id, email, name, picture) VALUES ($1, $2, $3, $4) RETURNING *',
-        [googleId, email, name, picture]
-      );
-      user = insertResult.rows[0];
-    }
-
-    res.json({ user });
-  } catch (error) {
-    console.error('Błąd podczas logowania Google:', error);
-    res.status(401).json({ error: 'Nieprawidłowy token Google' });
-  }
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Serwer działa na porcie ${port}`);
 });
