@@ -41,6 +41,56 @@ app.get('/api/locations', async (req, res) => {
   }
 });
 
+const { OAuth2Client } = require('google-auth-library');
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+app.post('/api/auth/google', async (req, res) => {
+  const { idToken } = req.body;
+  if (!idToken) {
+    return res.status(400).json({ error: 'Brak idToken' });
+  }
+
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    // Sprawdź, czy użytkownik już istnieje
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE google_id = $1',
+      [googleId]
+    );
+
+    let user;
+    if (userResult.rows.length === 0) {
+      // Nowy użytkownik – utwórz
+      const insertResult = await pool.query(
+        'INSERT INTO users (google_id, email, name, picture) VALUES ($1, $2, $3, $4) RETURNING *',
+        [googleId, email, name, picture]
+      );
+      user = insertResult.rows[0];
+    } else {
+      user = userResult.rows[0];
+    }
+
+    res.json({
+      message: 'Zalogowano pomyślnie',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+      },
+    });
+  } catch (err) {
+    console.error('Błąd logowania przez Google:', err);
+    res.status(401).json({ error: 'Token Google jest nieprawidłowy' });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
@@ -63,3 +113,4 @@ app.get('/', async (req, res) => {
   }
 });
 
+//-----------------------------------------------------------
