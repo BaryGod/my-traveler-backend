@@ -124,3 +124,24 @@ app.get('/api/users', async (req, res) => {
     res.status(500).json({ error: 'Błąd pobierania użytkowników' });
   }
 });
+
+app.post('/api/user/status', async (req, res) => {
+  const { google_id, status } = req.body;
+
+  if (!google_id || !status) {
+    return res.status(400).json({ error: 'Brak wymaganych danych' });
+  }
+
+  try {
+    await pool.query(
+      `UPDATE users 
+       SET status = $1, last_seen = NOW() 
+       WHERE google_id = $2`,
+      [status, google_id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Błąd aktualizacji statusu:', err);
+    res.status(500).json({ error: 'Błąd aktualizacji statusu' });
+  }
+});
