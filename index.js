@@ -111,3 +111,16 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Serwer działa na porcie ${port}`);
 });
+
+
+app.get('/api/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, full_name, status, last_seen FROM users ORDER BY full_name`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Błąd pobierania użytkowników:', error);
+    res.status(500).json({ error: 'Błąd pobierania użytkowników' });
+  }
+});
